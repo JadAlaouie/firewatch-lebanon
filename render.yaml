@@ -1,0 +1,41 @@
+services:
+  - type: web
+    name: firewatch-lebanon
+    runtime: node
+    region: frankfurt
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_VERSION
+        value: "20.19.0"
+      - key: HOST
+        value: "0.0.0.0"
+      - key: FIRMS_MAP_KEY
+        sync: false
+      - key: APP_LOGIN_USER
+        sync: false
+      - key: APP_LOGIN_PASSWORD
+        sync: false
+      - key: APP_SESSION_HOURS
+        value: "12"
+      - key: CALORIS_MTG_BRIDGE
+        value: "true"
+      - key: CALORIS_BASE_URL
+        value: https://forefire.univ-corse.fr/calormap/
+      - key: CALORIS_TIMEOUT_MS
+        value: "90000"
+      - key: CALORIS_INDEX_TIMEOUT_MS
+        value: "60000"
+      - key: CALORIS_REQUEST_TIMEOUT_MS
+        value: "15000"
+      - key: CALORIS_STALE_MS
+        value: "1800000"
+      - key: FIRE_BBOX
+        value: "34.75,32.75,36.75,34.75"
+      - key: FIRMS_CACHE_MS
+        value: "900000"
+      - key: FIRMS_TIMEOUT_MS
+        value: "45000"
