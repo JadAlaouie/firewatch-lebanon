@@ -1,29 +1,30 @@
-import { cellToLatLng, cellToParent, latLngToCell } from 'h3-js';
+import { cellToLatLng } from 'h3-js';
 
-export const LEBANON_PRESET_H4 = new Set([
-  '842da27ffffffff', '842d849ffffffff', '842d84dffffffff', '842da23ffffffff',
-  '842da35ffffffff', '842d84bffffffff', '842d841ffffffff', '842db1bffffffff',
-  '842da25ffffffff', '842db11ffffffff', '842db1dffffffff', '842db19ffffffff',
-  '842db57ffffffff',
-]);
-
-function insideExcludedHomsArea(latitude, longitude) {
-  return latitude >= 34.6 && longitude >= 36.5;
+function bboxParts(bbox) {
+  const parts = String(bbox || '').split(',').map(Number);
+  if (parts.length !== 4 || parts.some(value => !Number.isFinite(value))) return null;
+  const [west, south, east, north] = parts;
+  return west < east && south < north ? { west, south, east, north } : null;
 }
 
-export function insideLebanonPresetCell(cell) {
+export function insideCoveragePoint(latitude, longitude, bbox) {
+  const bounds = bboxParts(bbox);
+  return Boolean(
+    bounds
+    && Number.isFinite(latitude)
+    && Number.isFinite(longitude)
+    && longitude >= bounds.west
+    && longitude <= bounds.east
+    && latitude >= bounds.south
+    && latitude <= bounds.north,
+  );
+}
+
+export function insideCoverageCell(cell, bbox) {
   const [latitude, longitude] = cellToLatLng(cell);
-  return LEBANON_PRESET_H4.has(cellToParent(cell, 4))
-    && !insideExcludedHomsArea(latitude, longitude);
+  return insideCoveragePoint(latitude, longitude, bbox);
 }
 
-export function insideLebanonPresetPoint(latitude, longitude) {
-  return LEBANON_PRESET_H4.has(latLngToCell(latitude, longitude, 4))
-    && !insideExcludedHomsArea(latitude, longitude);
-}
-
-export function insideLebanonPresetDetection(detection) {
-  return detection.eventAnchorCell
-    ? insideLebanonPresetCell(detection.eventAnchorCell)
-    : insideLebanonPresetPoint(detection.latitude, detection.longitude);
+export function insideCoverageDetection(detection, bbox) {
+  return insideCoveragePoint(detection.latitude, detection.longitude, bbox);
 }

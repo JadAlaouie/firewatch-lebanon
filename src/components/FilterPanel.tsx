@@ -1,4 +1,5 @@
 import { Filter, ShieldCheck } from 'lucide-react';
+import { copy, sourceLabel, timeWindowLabel, type Language } from '../lib/i18n';
 import type { SourceMeta } from '../lib/sources';
 
 interface FilterPanelProps {
@@ -11,6 +12,7 @@ interface FilterPanelProps {
   onToggleSource: (source: string) => void;
   includeStatic: boolean;
   onIncludeStatic: (include: boolean) => void;
+  language: Language;
 }
 
 export function FilterPanel({
@@ -23,19 +25,22 @@ export function FilterPanel({
   onToggleSource,
   includeStatic,
   onIncludeStatic,
+  language,
 }: FilterPanelProps) {
+  const text = copy[language].filters;
+
   return (
-    <section className="filters" aria-label="Detection filters">
-      <div className="filter-heading"><Filter size={15} /><b>Filters</b></div>
-      <div className="time-segments" aria-label="Observation window">
-        {[6, 24, 48, 120].map(value => (
+    <section className="filters" aria-label={text.label}>
+      <div className="filter-heading"><Filter size={15} /><b>{text.heading}</b></div>
+      <div className="time-segments" aria-label={text.observationWindow}>
+        {[10 / 60, 6, 24, 48, 120].map(value => (
           <button
             type="button"
             key={value}
             className={hours === value ? 'active' : ''}
             onClick={() => onHours(value)}
           >
-            {value === 120 ? '5d' : `${value}h`}
+            {timeWindowLabel(value, language)}
           </button>
         ))}
       </div>
@@ -43,25 +48,25 @@ export function FilterPanel({
       <div className="filter-row">
         <label className="confidence-control">
           <ShieldCheck size={14} />
-          <span>Confidence</span>
+          <span>{text.confidence}</span>
           <select
             value={minimumConfidence}
             onChange={event => onMinimumConfidence(Number(event.target.value))}
           >
-            <option value={0}>All</option>
+            <option value={0}>{text.all}</option>
             <option value={60}>60+</option>
             <option value={80}>80+</option>
           </select>
         </label>
-        <label className="toggle-control" title="Include records marked as static or industrial heat sources">
+        <label className="toggle-control" title={text.staticHeatTitle}>
           <input type="checkbox" checked={includeStatic} onChange={event => onIncludeStatic(event.target.checked)} />
-          <span>Static heat</span>
+          <span>{text.staticHeat}</span>
         </label>
       </div>
 
-      <div className="source-filters" aria-label="Satellite source filters">
+      <div className="source-filters" aria-label={text.sources}>
         {sources.map(source => (
-          <label key={source.key} title={`${source.label}, nominal resolution ${source.resolution}`}>
+          <label key={source.key} title={text.sourceTitle(sourceLabel(source.key, source.label, language), source.resolution)}>
             <input
               type="checkbox"
               checked={!hiddenSources.has(source.key)}

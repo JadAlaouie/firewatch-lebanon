@@ -1,8 +1,14 @@
 import { Eye, EyeOff, LoaderCircle, LockKeyhole, LogIn, ShieldCheck, UserRound } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
+import { copy, languages, nextLanguage, type Language } from '../lib/i18n';
 import ncneLogo from '../../ncne-white-resized.png';
 
-export function LoginPage({ onAuthenticated }: { onAuthenticated: () => void }) {
+export function LoginPage({ language, onLanguage, onAuthenticated }: {
+  language: Language;
+  onLanguage: (language: Language) => void;
+  onAuthenticated: () => void;
+}) {
+  const text = copy[language];
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -19,32 +25,34 @@ export function LoginPage({ onAuthenticated }: { onAuthenticated: () => void }) 
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ username, password }),
       });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(result.error || `Sign-in failed (HTTP ${response.status})`);
+      if (!response.ok) throw new Error(text.login.failed);
       onAuthenticated();
-    } catch (loginError) {
-      setError(loginError instanceof Error ? loginError.message : 'Unable to sign in.');
+    } catch {
+      setError(text.login.failed);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <main className="login-screen">
+    <main className="login-screen" dir={languages[language].dir}>
+      <button type="button" className="language-toggle login-language-toggle" onClick={() => onLanguage(nextLanguage(language))}>
+        {text.login.switchLanguage}
+      </button>
       <section className="login-panel" aria-labelledby="login-title">
         <header className="login-brand">
           <img src={ncneLogo} alt="NCNE" />
-          <div><b>Firewatch</b><span>Lebanon</span></div>
+          <div><b>{text.brand.name}</b><span>{text.brand.place}</span></div>
         </header>
 
         <form className="login-form" onSubmit={submit}>
           <div className="login-heading">
             <ShieldCheck size={22} />
-            <div><span>Restricted access</span><h1 id="login-title">Sign in</h1></div>
+            <div><span>{text.login.restricted}</span><h1 id="login-title">{text.login.title}</h1></div>
           </div>
 
           <div className="login-field">
-            <label htmlFor="login-username">Username</label>
+            <label htmlFor="login-username">{text.login.username}</label>
             <div className="login-input">
               <UserRound size={17} />
               <input
@@ -60,7 +68,7 @@ export function LoginPage({ onAuthenticated }: { onAuthenticated: () => void }) 
           </div>
 
           <div className="login-field">
-            <label htmlFor="login-password">Password</label>
+            <label htmlFor="login-password">{text.login.password}</label>
             <div className="login-input">
               <LockKeyhole size={17} />
               <input
@@ -75,8 +83,8 @@ export function LoginPage({ onAuthenticated }: { onAuthenticated: () => void }) 
               <button
                 type="button"
                 className="login-password-toggle"
-                aria-label={showPassword ? 'Hide password' : 'Show password'}
-                title={showPassword ? 'Hide password' : 'Show password'}
+                aria-label={showPassword ? text.login.hidePassword : text.login.showPassword}
+                title={showPassword ? text.login.hidePassword : text.login.showPassword}
                 onClick={() => setShowPassword(current => !current)}
               >
                 {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
@@ -87,11 +95,11 @@ export function LoginPage({ onAuthenticated }: { onAuthenticated: () => void }) 
           <div className="login-error" role="alert">{error}</div>
           <button className="login-submit" type="submit" disabled={loading || !username || !password}>
             {loading ? <LoaderCircle className="spin" size={18} /> : <LogIn size={18} />}
-            <span>{loading ? 'Signing in' : 'Sign in'}</span>
+            <span>{loading ? text.login.signingIn : text.login.submit}</span>
           </button>
         </form>
 
-        <footer>NCNE - Fire monitoring workspace</footer>
+        <footer>{text.login.footer}</footer>
       </section>
     </main>
   );

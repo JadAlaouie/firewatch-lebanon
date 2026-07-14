@@ -14,6 +14,7 @@ import Map, {
 import type { FeatureCollection, MultiPolygon, Point, Polygon } from 'geojson';
 import type { StyleSpecification } from 'maplibre-gl';
 import type { FireEvent } from '../types';
+import { copy, eventName, type Language } from '../lib/i18n';
 import { sourceColor } from '../lib/sources';
 import { formatNumber, relativeTime } from '../lib/time';
 
@@ -22,6 +23,7 @@ type Basemap = 'street' | 'terrain';
 const styles: Record<Basemap, StyleSpecification> = {
   street: {
     version: 8,
+    glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
     sources: {
       osm: {
         type: 'raster',
@@ -43,6 +45,7 @@ const styles: Record<Basemap, StyleSpecification> = {
   },
   terrain: {
     version: 8,
+    glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
     sources: {
       topo: {
         type: 'raster',
@@ -69,7 +72,7 @@ const eventFill: LayerProps = {
   id: 'event-fill',
   type: 'fill',
   paint: {
-    'fill-color': ['match', ['get', 'priority'], 'critical', '#ff1744', 'high', '#ff7a00', '#ffd400'],
+    'fill-color': ['match', ['get', 'priority'], 'critical', '#ff003d', 'high', '#7c3aed', '#ff2fa8'],
     'fill-opacity': ['case', ['boolean', ['get', 'selected'], false], 0.72, 0.48],
   },
 };
@@ -78,7 +81,7 @@ const eventOutline: LayerProps = {
   id: 'event-outline',
   type: 'line',
   paint: {
-    'line-color': ['match', ['get', 'priority'], 'critical', '#690016', 'high', '#713200', '#695700'],
+    'line-color': ['match', ['get', 'priority'], 'critical', '#7f001f', 'high', '#3b128f', '#8a005f'],
     'line-width': ['case', ['boolean', ['get', 'selected'], false], 4.5, 2.8],
     'line-opacity': 1,
   },
@@ -88,7 +91,7 @@ const eventHalo: LayerProps = {
   id: 'event-halo',
   type: 'circle',
   paint: {
-    'circle-color': ['match', ['get', 'priority'], 'critical', '#ff1744', 'high', '#ff7a00', '#ffd400'],
+    'circle-color': ['match', ['get', 'priority'], 'critical', '#ff003d', 'high', '#7c3aed', '#ff2fa8'],
     'circle-radius': ['interpolate', ['linear'], ['get', 'count'], 1, 16, 12, 23, 40, 32],
     'circle-opacity': 0.34,
     'circle-blur': 0.25,
@@ -109,11 +112,32 @@ const eventPoints: LayerProps = {
   id: 'event-points',
   type: 'circle',
   paint: {
-    'circle-color': ['match', ['get', 'priority'], 'critical', '#ff1744', 'high', '#ff7a00', '#ffd400'],
+    'circle-color': ['match', ['get', 'priority'], 'critical', '#ff003d', 'high', '#7c3aed', '#ff2fa8'],
     'circle-radius': ['interpolate', ['linear'], ['get', 'count'], 1, 9, 12, 14, 40, 23],
     'circle-stroke-color': '#ffffff',
     'circle-stroke-width': ['case', ['boolean', ['get', 'selected'], false], 4, 2.2],
     'circle-opacity': 1,
+  },
+};
+
+const eventLabels: LayerProps = {
+  id: 'event-labels',
+  type: 'symbol',
+  layout: {
+    'text-field': ['get', 'name'],
+    'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
+    'text-size': ['interpolate', ['linear'], ['zoom'], 6, 10, 9, 12, 12, 14],
+    'text-offset': [0, 1.45],
+    'text-anchor': 'top',
+    'text-max-width': 10,
+    'text-allow-overlap': false,
+  },
+  paint: {
+    'text-color': ['match', ['get', 'priority'], 'critical', '#d60036', 'high', '#6426d9', '#c8008f'],
+    'text-halo-color': '#ffffff',
+    'text-halo-width': 2.4,
+    'text-halo-blur': 0.45,
+    'text-opacity': ['interpolate', ['linear'], ['zoom'], 6, 0, 6.8, 1],
   },
 };
 
@@ -143,9 +167,11 @@ interface FireMapProps {
   events: FireEvent[];
   selected?: FireEvent;
   onSelect: (event: FireEvent) => void;
+  language: Language;
 }
 
-export function FireMap({ events, selected, onSelect }: FireMapProps) {
+export function FireMap({ events, selected, onSelect, language }: FireMapProps) {
+  const text = copy[language].map;
   const mapRef = useRef<MapRef>(null);
   const fittedInitialEvents = useRef(false);
   const [basemap, setBasemap] = useState<Basemap>('street');
@@ -173,12 +199,13 @@ export function FireMap({ events, selected, onSelect }: FireMapProps) {
       geometry: { type: 'Point', coordinates: [event.longitude, event.latitude] },
       properties: {
         id: event.id,
+        name: eventName(event.name, language),
         priority: event.priority,
         count: event.detectionCount,
         selected: selected?.id === event.id,
       },
     })),
-  }), [events, selected?.id]);
+  }), [events, language, selected?.id]);
 
   const selectedData = useMemo<FeatureCollection<Point>>(() => ({
     type: 'FeatureCollection',
@@ -228,7 +255,7 @@ export function FireMap({ events, selected, onSelect }: FireMapProps) {
         initialViewState={{ longitude: 35.86, latitude: 33.88, zoom: 7.6 }}
         mapStyle={styles[basemap]}
         style={{ width: '100%', height: '100%' }}
-        interactiveLayerIds={['event-points', 'event-fill']}
+        interactiveLayerIds={['event-points', 'event-fill', 'event-labels']}
         onClick={event => {
           const fireEvent = featureEvent(event);
           if (fireEvent) onSelect(fireEvent);
@@ -255,6 +282,7 @@ export function FireMap({ events, selected, onSelect }: FireMapProps) {
           <Layer {...eventHalo} />
           <Layer {...eventContrastRing} />
           <Layer {...eventPoints} />
+          <Layer {...eventLabels} />
         </Source>
         <Source id="detection-points" type="geojson" data={selectedData}>
           <Layer {...detectionContrastRing} />
@@ -273,29 +301,29 @@ export function FireMap({ events, selected, onSelect }: FireMapProps) {
             offset={14}
           >
             <div className="map-popup">
-              <b>{hovered.name}</b>
-              <span>{relativeTime(hovered.lastSeen)} - {hovered.detectionCount} detections</span>
-              <small>{formatNumber(hovered.totalFrp, 1)} summed FRP</small>
+              <b>{eventName(hovered.name, language)}</b>
+              <span>{relativeTime(hovered.lastSeen, Date.now(), language)} - {formatNumber(hovered.detectionCount, 0, language)} {text.detections}</span>
+              <small>{formatNumber(hovered.totalFrp, 1, language)} {text.summedFrp}</small>
             </div>
           </Popup>
         )}
       </Map>
 
-      <div className="basemap-control" role="group" aria-label="Basemap">
+      <div className="basemap-control" role="group" aria-label={text.basemap}>
         <Layers3 size={15} />
-        <button type="button" className={basemap === 'street' ? 'active' : ''} onClick={() => setBasemap('street')} title="Street map">
-          <MapIcon size={15} /><span>Street</span>
+        <button type="button" className={basemap === 'street' ? 'active' : ''} onClick={() => setBasemap('street')} title={text.streetTitle}>
+          <MapIcon size={15} /><span>{text.street}</span>
         </button>
-        <button type="button" className={basemap === 'terrain' ? 'active' : ''} onClick={() => setBasemap('terrain')} title="Terrain map">
-          <Mountain size={15} /><span>Terrain</span>
+        <button type="button" className={basemap === 'terrain' ? 'active' : ''} onClick={() => setBasemap('terrain')} title={text.terrainTitle}>
+          <Mountain size={15} /><span>{text.terrain}</span>
         </button>
       </div>
 
       <div className="map-legend">
-        <span><i className="priority-critical" /> Critical</span>
-        <span><i className="priority-high" /> High</span>
-        <span><i className="priority-watch" /> Watch</span>
-        <small>H3 detection envelopes</small>
+        <span><i className="priority-critical" /> {text.critical}</span>
+        <span><i className="priority-high" /> {text.high}</span>
+        <span><i className="priority-watch" /> {text.watch}</span>
+        <small>{text.legendNote}</small>
       </div>
     </div>
   );

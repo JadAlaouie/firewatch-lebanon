@@ -42,6 +42,20 @@ describe('clusterDetections', () => {
     expect(events).toHaveLength(2);
   });
 
+  it('names the requested regional clusters for display', () => {
+    const events = clusterDetections([
+      detection({ latitude: 33.4187, longitude: 36.6868 }),
+      detection({ latitude: 34.7145, longitude: 36.6544 }),
+      detection({ latitude: 32.8967, longitude: 35.0871 }),
+    ]);
+
+    expect(events.map(event => event.name)).toEqual(expect.arrayContaining([
+      'Rif Dimashq cluster',
+      'Homs cluster',
+      'Northern Israel cluster',
+    ]));
+  });
+
   it('starts a new event after the temporal continuity gap', () => {
     const events = clusterDetections([
       detection(),

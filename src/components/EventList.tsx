@@ -1,5 +1,6 @@
 import { ArrowDownUp, Flame } from 'lucide-react';
 import type { FireEvent } from '../types';
+import { copy, eventName, statusLabel, type Language } from '../lib/i18n';
 import { sourceMeta } from '../lib/sources';
 import { formatNumber, relativeTime } from '../lib/time';
 
@@ -19,20 +20,22 @@ interface EventListProps {
   sort: EventSort;
   onSort: (sort: EventSort) => void;
   onSelect: (event: FireEvent) => void;
+  language: Language;
 }
 
-export function EventList({ events, selectedId, sort, onSort, onSelect }: EventListProps) {
+export function EventList({ events, selectedId, sort, onSort, onSelect, language }: EventListProps) {
+  const text = copy[language].events;
   const sorted = sortEvents(events, sort);
   return (
     <section className="event-list-section">
       <div className="list-toolbar">
-        <div><h2>Fire clusters</h2><span>{events.length} grouped events</span></div>
-        <label className="select-control" title="Sort fire clusters">
+        <div><h2>{text.heading}</h2><span>{text.grouped(events.length)}</span></div>
+        <label className="select-control" title={text.sortTitle}>
           <ArrowDownUp size={14} />
-          <select value={sort} onChange={event => onSort(event.target.value as EventSort)} aria-label="Sort clusters">
-            <option value="latest">Latest</option>
-            <option value="frp">FRP</option>
-            <option value="count">Detections</option>
+          <select value={sort} onChange={event => onSort(event.target.value as EventSort)} aria-label={text.sortLabel}>
+            <option value="latest">{text.latest}</option>
+            <option value="frp">{text.frp}</option>
+            <option value="count">{text.detections}</option>
           </select>
         </label>
       </div>
@@ -48,8 +51,8 @@ export function EventList({ events, selectedId, sort, onSort, onSelect }: EventL
             <span className={`event-priority priority-${event.priority}`} />
             <span className="event-main">
               <span className="event-title-line">
-                <b>{event.name}</b>
-                <time>{relativeTime(event.lastSeen)}</time>
+                <b>{eventName(event.name, language)}</b>
+                <time>{relativeTime(event.lastSeen, Date.now(), language)}</time>
               </span>
               <span className="event-source-line">
                 <span className="source-dots">
@@ -57,21 +60,21 @@ export function EventList({ events, selectedId, sort, onSort, onSelect }: EventL
                     <i key={source} style={{ backgroundColor: sourceMeta(source).color }} title={sourceMeta(source).label} />
                   ))}
                 </span>
-                {event.status === 'recent' ? 'Recent activity' : event.status === 'monitoring' ? 'Monitoring' : 'Older activity'}
+                {statusLabel(event.status, language)}
               </span>
             </span>
             <span className="event-stats">
-              <b>{formatNumber(event.totalFrp, 1)}</b>
-              <small>FRP</small>
-              <span><Flame size={12} /> {event.detectionCount}</span>
+              <b>{formatNumber(event.totalFrp, 1, language)}</b>
+              <small>{text.frp}</small>
+              <span><Flame size={12} /> {formatNumber(event.detectionCount, 0, language)}</span>
             </span>
           </button>
         ))}
         {!events.length && (
           <div className="empty-state">
             <Flame size={24} />
-            <b>No matching clusters</b>
-            <span>Adjust the source or confidence filters.</span>
+            <b>{text.emptyTitle}</b>
+            <span>{text.emptyText}</span>
           </div>
         )}
       </div>

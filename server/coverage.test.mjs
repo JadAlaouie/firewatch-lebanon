@@ -1,26 +1,33 @@
 import { describe, expect, it } from 'vitest';
+import { latLngToCell } from 'h3-js';
 import {
-  insideLebanonPresetCell,
-  insideLebanonPresetDetection,
-  insideLebanonPresetPoint,
+  insideCoverageCell,
+  insideCoverageDetection,
+  insideCoveragePoint,
 } from './coverage.mjs';
 
-describe('Lebanon H3 coverage', () => {
-  it('keeps the comparison tracker event anchors', () => {
-    expect(insideLebanonPresetCell('872db18c6ffffff')).toBe(true);
-    expect(insideLebanonPresetPoint(33.392, 35.5476)).toBe(true);
-    expect(insideLebanonPresetPoint(34.53, 36.08)).toBe(true);
+const bbox = '34.75,32.75,36.75,34.75';
+
+describe('configured regional coverage', () => {
+  it('keeps Lebanon, Rif Dimashq, Homs, and northern Israel', () => {
+    const requestedPoints = [
+      [33.392, 35.5476],
+      [33.4187, 36.6868],
+      [34.7145, 36.6544],
+      [32.96, 35.50],
+    ];
+
+    for (const [latitude, longitude] of requestedPoints) {
+      expect(insideCoveragePoint(latitude, longitude, bbox)).toBe(true);
+      expect(insideCoverageCell(latLngToCell(latitude, longitude, 7), bbox)).toBe(true);
+      expect(insideCoverageDetection({ latitude, longitude }, bbox)).toBe(true);
+    }
   });
 
-  it('removes the FIRMS-only Rif Dimashq event outside the preset', () => {
-    expect(insideLebanonPresetPoint(33.4187, 36.6868)).toBe(false);
-    expect(insideLebanonPresetDetection({ latitude: 33.4187, longitude: 36.6868 })).toBe(false);
-  });
-
-  it('removes Homs events without removing Lebanese northern-border points', () => {
-    expect(insideLebanonPresetCell('872d84b4affffff')).toBe(false);
-    expect(insideLebanonPresetCell('872d84b53ffffff')).toBe(false);
-    expect(insideLebanonPresetPoint(34.7145, 36.6544)).toBe(false);
-    expect(insideLebanonPresetPoint(34.63202, 36.60036)).toBe(false);
+  it('rejects records outside the configured map area', () => {
+    expect(insideCoveragePoint(33.5, 36.9, bbox)).toBe(false);
+    expect(insideCoveragePoint(32.5, 35.5, bbox)).toBe(false);
+    expect(insideCoveragePoint(35.0, 36.5, bbox)).toBe(false);
+    expect(insideCoveragePoint(33.5, 34.5, bbox)).toBe(false);
   });
 });

@@ -32,10 +32,10 @@ services:
       - key: CALORIS_REQUEST_TIMEOUT_MS
         value: "15000"
       - key: CALORIS_STALE_MS
-        value: "1800000"
+        value: "600000"
       - key: FIRE_BBOX
         value: "34.75,32.75,36.75,34.75"
       - key: FIRMS_CACHE_MS
-        value: "900000"
+        value: "240000"
       - key: FIRMS_TIMEOUT_MS
         value: "45000"

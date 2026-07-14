@@ -1,6 +1,6 @@
 # Firewatch Lebanon
 
-An independent operational map for recent satellite thermal anomalies over Lebanon. It reads NASA FIRMS active-fire feeds, can add MTG-FCI observations from the Tabula Caloris compatibility bridge, groups nearby observations into trackable events, and keeps the difference between a satellite detection and a mapped fire perimeter explicit.
+An independent operational map for recent satellite thermal anomalies over Lebanon and the nearby configured region, including Rif Dimashq, Homs, and northern Israel. It reads NASA FIRMS active-fire feeds, adds 10-minute MTG-FCI observations from the Tabula Caloris compatibility bridge by default, groups nearby observations into trackable events, and keeps the difference between a satellite detection and a mapped fire perimeter explicit.
 
 The data layer can run without provider credentials using clearly labeled generated demo data. A free NASA FIRMS map key enables the live feed. Application access is protected by a server-side username and password configured in `.env`.
 
@@ -27,7 +27,7 @@ For access beyond the local machine, serve the application through HTTPS so the 
 
 ## Data sources
 
-The server queries the [NASA FIRMS Area API](https://firms.modaps.eosdis.nasa.gov/api/area/) for these near-real-time products:
+The server queries the [NASA FIRMS Area API](https://firms.modaps.eosdis.nasa.gov/api/area/) and the MTG compatibility bridge for these near-real-time products:
 
 | Product | Sensor/platform | Nominal active-fire pixel |
 | --- | --- | --- |
@@ -37,9 +37,9 @@ The server queries the [NASA FIRMS Area API](https://firms.modaps.eosdis.nasa.go
 | `MODIS_NRT` | MODIS / Terra and Aqua | 1 km |
 | `MTG_FCI_LSA_SAF` | FCI / MTG-I1 | 1 km |
 
-FIRMS is an open-data service with a free API key; it is not an anonymous unlimited endpoint. Sensor resolution and current product availability are documented by [NASA FIRMS Active Fire Data](https://firms.modaps.eosdis.nasa.gov/active_fire/).
+FIRMS is an open-data service with a free API key; it is not an anonymous unlimited endpoint. NASA documents the global FIRMS feed as near-real-time rather than 5-10 minute global latency. Sensor resolution and current product availability are documented by [NASA FIRMS Active Fire Data](https://firms.modaps.eosdis.nasa.gov/active_fire/).
 
-The optional MTG bridge reads only FCI records from the public Tabula Caloris live index and attributes the underlying observations to [EUMETSAT LSA SAF](https://lsa-saf.eumetsat.int/en/data/products/fire-products/). It avoids duplicating VIIRS and MODIS records already retrieved from FIRMS. This is a compatibility endpoint rather than a documented service contract, so production systems should obtain direct LSA SAF data-service access and retain FIRMS-only fallback behavior.
+The MTG bridge is enabled by default because EUMETSAT's Meteosat Third Generation (MTG) satellite, through its FCI instrument, is the free geostationary source that can observe the Lebanon region on a 10-minute cycle. The bridge reads only FCI records from the public Tabula Caloris live index and attributes the underlying observations to [EUMETSAT LSA SAF](https://lsa-saf.eumetsat.int/en/data/products/fire-products/). It avoids duplicating VIIRS and MODIS records already retrieved from FIRMS. This is a compatibility endpoint rather than a documented service contract, so production systems should obtain direct LSA SAF data-service access and retain FIRMS fallback behavior.
 
 The map uses MapLibre GL JS with OpenStreetMap and OpenTopoMap raster tiles. Their public tile servers are suitable for development and light use. A public production deployment should use an appropriate hosted or self-managed tile service and comply with attribution and usage policies.
 
@@ -47,13 +47,15 @@ The map uses MapLibre GL JS with OpenStreetMap and OpenTopoMap raster tiles. The
 
 1. The browser asks the local Express server for a time window between 1 and 120 hours.
 2. The server converts the window to a FIRMS day range and queries all four NASA products in parallel for `west,south,east,north`.
-3. FIRMS and MTG retrieval run independently in parallel. The larger Caloris live index has its own timeout; transient index and event-file failures are retried, successful event files are retained, and a recent in-memory MTG snapshot can cover a failed refresh.
-4. When enabled, the server reads recent Lebanon events from the Caloris live index and imports only MTG-FCI hotspot records. MTG positions are H3 resolution-9 cell centers from the compatibility record.
+3. FIRMS and MTG retrieval run independently in parallel. The larger Caloris live index has its own timeout; transient index and event-file failures are retried, successful event files are retained, and a recent in-memory MTG snapshot can cover a failed refresh for up to 10 minutes.
+4. When enabled, the server reads recent events inside the configured regional bounding box from the Caloris live index and imports only MTG-FCI hotspot records. MTG positions are H3 resolution-9 cell centers from the compatibility record.
 5. Responses are normalized to UTC timestamp, coordinates, instrument, platform, source product, confidence, Fire Radiative Power (FRP), day/night flag, and type when supplied.
 6. Invalid dates and coordinates are dropped. The requested hour cutoff is applied after retrieval.
-7. Successful source responses are combined and filtered to the comparison tracker's Lebanon H3 coverage, with explicit exclusions for the Syrian Rif Dimashq and Homs areas. This prevents rectangular FIRMS query bounds and coarse border cells from adding those foreign events.
+7. Successful source responses are combined and filtered to the configured bounding box. The default box retains Lebanon, Rif Dimashq, Homs, and northern Israel while rejecting records outside that regional map area.
 8. Individual source failures produce a **Partial live** result instead of discarding valid data.
-9. Results are cached server-side for four minutes by default. The browser refreshes every five minutes while a local CSV is not active.
+9. Results are cached server-side for four minutes by default. The browser refreshes every five minutes while a local CSV is not active, keeping the app polling inside the requested 5-10 minute operating window. The filters include a `10m` view for the newest ten minutes of observations.
+
+The dashboard opens on the five-day window so the wider regional context is visible immediately; shorter windows remain available in the filters.
 
 The API key remains on the server. It is never included in browser JavaScript or browser network requests.
 
@@ -100,12 +102,12 @@ Recognized optional columns include `frp`, `confidence`, `instrument`, `satellit
 | --- | --- | --- |
 | `FIRMS_MAP_KEY` | empty | Enables live NASA FIRMS retrieval |
 | `FIRMS_CA_CERT` | empty | Optional extra PEM CA for inspected HTTPS connections |
-| `CALORIS_MTG_BRIDGE` | `false` | Adds MTG-FCI records from the public Caloris live index |
+| `CALORIS_MTG_BRIDGE` | `true` | Adds MTG-FCI records from the public Caloris live index |
 | `CALORIS_BASE_URL` | Caloris public URL | Compatibility endpoint base URL |
 | `CALORIS_TIMEOUT_MS` | `90000` | Overall MTG provider timeout |
 | `CALORIS_INDEX_TIMEOUT_MS` | `60000` | Timeout per Caloris live-index attempt |
 | `CALORIS_REQUEST_TIMEOUT_MS` | `15000` | Timeout per Caloris event-file attempt |
-| `CALORIS_STALE_MS` | `1800000` | Maximum age for an in-memory MTG fallback snapshot |
+| `CALORIS_STALE_MS` | `600000` | Maximum age for an in-memory MTG fallback snapshot |
 | `APP_LOGIN_USER` | empty | Required application username |
 | `APP_LOGIN_PASSWORD` | empty | Required application password; keep only in `.env` |
 | `APP_SESSION_HOURS` | `12` | In-memory login session lifetime |
@@ -139,7 +141,7 @@ This repository includes a `render.yaml` Blueprint for one free Node web service
 5. Confirm the `firewatch-lebanon` service uses the **Free** instance and click **Deploy Blueprint**.
 6. Wait for the build and `/health` check to pass, then open the generated `https://firewatch-lebanon-...onrender.com` URL and sign in.
 
-The Render configuration uses a 15-minute data cache to reduce Caloris traffic and help stay within free outbound-bandwidth limits. A free service sleeps after 15 minutes without inbound traffic and can take about one minute to wake. Because sessions are in memory, a sleep, restart, or deployment signs users out. No database or persistent disk is required.
+The Render configuration uses the same four-minute data cache as local development so refreshed MTG observations are not held behind a long server cache. A free service sleeps after 15 minutes without inbound traffic and can take about one minute to wake. Because sessions are in memory, a sleep, restart, or deployment signs users out. No database or persistent disk is required.
 
 ## Limitations and responsible use
 

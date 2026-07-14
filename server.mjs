@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { CALORIS_SOURCE, fetchCalorisMtGDetections } from './server/caloris.mjs';
 import { createAuth } from './server/auth.mjs';
-import { insideLebanonPresetDetection } from './server/coverage.mjs';
+import { insideCoverageDetection } from './server/coverage.mjs';
 import { makeDemoDetections } from './server/demo.mjs';
 import { fetchFirmsDetections, FIRMS_SOURCES } from './server/firms.mjs';
 
@@ -14,12 +14,12 @@ const port = Number(process.env.PORT || 4173);
 const host = process.env.HOST || '127.0.0.1';
 const defaultBbox = process.env.FIRE_BBOX || '34.75,32.75,36.75,34.75';
 const cacheTtl = Number(process.env.FIRMS_CACHE_MS || 240000);
-const mtgBridgeEnabled = /^(1|true|yes)$/i.test(process.env.CALORIS_MTG_BRIDGE || 'false');
+const mtgBridgeEnabled = /^(1|true|yes)$/i.test(process.env.CALORIS_MTG_BRIDGE || 'true');
 const firmsTimeoutMs = Number(process.env.FIRMS_TIMEOUT_MS || 45_000);
 const mtgTimeoutMs = Number(process.env.CALORIS_TIMEOUT_MS || 90_000);
 const mtgRequestTimeoutMs = Number(process.env.CALORIS_REQUEST_TIMEOUT_MS || 15_000);
 const mtgIndexTimeoutMs = Number(process.env.CALORIS_INDEX_TIMEOUT_MS || 60_000);
-const mtgStaleMs = Number(process.env.CALORIS_STALE_MS || 1_800_000);
+const mtgStaleMs = Number(process.env.CALORIS_STALE_MS || 600_000);
 const responseCache = new Map();
 const mtgSnapshotCache = new Map();
 const auth = createAuth({
@@ -164,7 +164,7 @@ app.get('/api/detections', auth.requireAuth, async (request, response) => {
       if (successfulSources === 0 && !mtgSucceeded) {
         throw new Error(warnings.join('; ') || 'All live sources failed');
       }
-      detections = detections.filter(insideLebanonPresetDetection);
+      detections = detections.filter(detection => insideCoverageDetection(detection, bbox));
       envelope = responseEnvelope({
         mode: warnings.length ? 'live-partial' : 'live',
         detections,

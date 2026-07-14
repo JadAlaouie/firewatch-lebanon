@@ -1,10 +1,11 @@
 const regions = [
   ['Homs', 36.72, 34.73],
   ['Al-Qusayr', 36.58, 34.51],
+  ['Rif Dimashq', 36.69, 33.42],
   ['Damascus', 36.29, 33.51],
   ['Quneitra', 35.82, 33.12],
   ['Golan Heights', 35.72, 33.03],
-  ['Safed', 35.50, 32.96],
+  ['Northern Israel', 35.50, 32.96],
   ['Akkar', 36.08, 34.53],
   ['Tripoli', 35.84, 34.43],
   ['Zgharta', 35.91, 34.39],

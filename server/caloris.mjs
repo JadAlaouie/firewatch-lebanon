@@ -1,5 +1,5 @@
 import { cellToLatLng, cellToParent } from 'h3-js';
-import { insideLebanonPresetCell } from './coverage.mjs';
+import { insideCoverageCell, insideCoveragePoint } from './coverage.mjs';
 import { getBuffer } from './http.mjs';
 
 export const CALORIS_SOURCE = 'MTG_FCI_LSA_SAF';
@@ -59,7 +59,7 @@ async function getLiveIndex(url, options) {
 
   const commonHeaders = {
     accept: 'application/octet-stream',
-    referer: new URL('../../track.html?presets=Lebanon', url).href,
+    referer: new URL('../../track.html', url).href,
   };
   const probe = await getCalorisResponse(url, {
     ...options,
@@ -132,7 +132,7 @@ export function decodeLiveEvents(buffer, options = {}) {
     const h7 = buffer.readBigUInt64LE(offset).toString(16).padStart(15, '0');
     const first = buffer.readBigUInt64LE(offset + 8);
     const last = buffer.readBigUInt64LE(offset + 16);
-    if (!insideLebanonPresetCell(h7)) continue;
+    if (!insideCoverageCell(h7, options.bbox)) continue;
     if (tixEpoch(last) * 1000 < cutoff) continue;
     events.push({
       id: eventId(h7, first),
@@ -144,11 +144,6 @@ export function decodeLiveEvents(buffer, options = {}) {
   }
 
   return events;
-}
-
-function insideBbox(longitude, latitude, bbox) {
-  const [west, south, east, north] = bbox.split(',').map(Number);
-  return longitude >= west && longitude <= east && latitude >= south && latitude <= north;
 }
 
 function dayNight(timestamp, longitude) {
@@ -167,7 +162,7 @@ export function decodeMtGRecords(buffer, options) {
     const timestamp = new Date(tixEpoch(buffer.readBigUInt64BE(offset + 8)) * 1000).toISOString();
     if (Date.parse(timestamp) < cutoff) continue;
     const [latitude, longitude] = cellToLatLng(cell);
-    if (!insideBbox(longitude, latitude, options.bbox)) continue;
+    if (!insideCoveragePoint(latitude, longitude, options.bbox)) continue;
 
     detections.push({
       id: `mtg-${cell}-${timestamp}-${offset}`,
@@ -226,7 +221,7 @@ export async function fetchCalorisMtGDetections({
   });
 
   const now = Date.now();
-  const events = decodeLiveEvents(indexBody, { hours, now });
+  const events = decodeLiveEvents(indexBody, { hours, bbox, now });
   const eventResults = await mapConcurrentSettled(events, 6, async event => {
     const url = new URL('stfyhotspot.php', base);
     url.searchParams.set('api', 'event');
