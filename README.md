@@ -53,7 +53,7 @@ The map uses MapLibre GL JS with OpenStreetMap and OpenTopoMap raster tiles. The
 6. Invalid dates and coordinates are dropped. The requested hour cutoff is applied after retrieval.
 7. Successful source responses are combined and filtered to the configured bounding box. The default box retains Lebanon, Rif Dimashq, Homs, and northern Israel while rejecting records outside that regional map area.
 8. Individual source failures produce a **Partial live** result instead of discarding valid data.
-9. Results are cached server-side for four minutes by default. The browser refreshes every five minutes while a local CSV is not active, keeping the app polling inside the requested 5-10 minute operating window. The filters include a `10m` view for the newest ten minutes of observations.
+9. Results are cached server-side for four minutes by default. The browser checks the live feeds every ten minutes while a local CSV is not active, and performs a catch-up refresh when a backgrounded tab becomes visible again. The filters include a `10m` view for the newest ten minutes of observations.
 
 The dashboard opens on the five-day window so the wider regional context is visible immediately; shorter windows remain available in the filters.
 

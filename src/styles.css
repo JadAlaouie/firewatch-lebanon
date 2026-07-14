@@ -201,6 +201,7 @@ h1, h2, h3, p { margin: 0; }
 .mode-badge.demo i { background: #ff8b32; }
 .mode-badge.imported i { background: #60a5c2; }
 .observation-age { display: inline-flex; align-items: center; gap: 6px; color: #aeb4b2; font-size: 12px; white-space: nowrap; }
+.refresh-cadence { color: #8fc8a5; font-size: 11px; white-space: nowrap; }
 .top-actions { justify-content: flex-end; gap: 6px; }
 
 .icon-button {
@@ -575,7 +576,7 @@ h1, h2, h3, p { margin: 0; }
   .brand-block b, .brand-block span:last-child { display: block; line-height: 1.1; }
   .brand-block b { font-size: 13px; }
   .brand-block span:last-child { margin-top: 2px; font-size: 9px; }
-  .observation-age { display: none; }
+  .observation-age, .refresh-cadence { display: none; }
   .workspace { grid-template-columns: 1fr; grid-template-rows: minmax(270px, 55%) minmax(250px, 45%); }
   .map-pane { grid-row: 1; }
   .sidebar { grid-row: 2; border-top: 1px solid #afb5b0; border-right: 0; }

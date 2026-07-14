@@ -16,6 +16,7 @@ import { parseDetectionCsv } from './lib/csv';
 import { copy, languages, nextLanguage, storedLanguage, type Language } from './lib/i18n';
 import { sourceMeta, type SourceMeta } from './lib/sources';
 import { formatNumber, relativeTime } from './lib/time';
+import { LIVE_REFRESH_MS, liveRefreshDue } from './lib/refresh';
 import { DisclaimerPanel } from './components/DisclaimerPanel';
 import { EventDetail } from './components/EventDetail';
 import { EventList, type EventSort } from './components/EventList';
@@ -108,8 +109,10 @@ function FirewatchDashboard({ language, onLanguage, onUnauthorized, onLogout }: 
   const [methodologyOpen, setMethodologyOpen] = useState(false);
   const [toast, setToast] = useState<Toast>();
   const fileInput = useRef<HTMLInputElement>(null);
+  const lastLiveRefreshAt = useRef(0);
 
   const loadDetections = useCallback(async () => {
+    lastLiveRefreshAt.current = Date.now();
     setLoading(true);
     setError(undefined);
     try {
@@ -131,8 +134,17 @@ function FirewatchDashboard({ language, onLanguage, onUnauthorized, onLogout }: 
 
   useEffect(() => {
     if (imported) return undefined;
-    const timer = window.setInterval(loadDetections, 300000);
-    return () => window.clearInterval(timer);
+    const refreshIfDue = () => {
+      if (document.visibilityState !== 'hidden' && liveRefreshDue(lastLiveRefreshAt.current)) {
+        loadDetections();
+      }
+    };
+    const timer = window.setInterval(refreshIfDue, LIVE_REFRESH_MS);
+    document.addEventListener('visibilitychange', refreshIfDue);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', refreshIfDue);
+    };
   }, [imported, loadDetections]);
 
   useEffect(() => {
@@ -225,6 +237,12 @@ function FirewatchDashboard({ language, onLanguage, onUnauthorized, onLogout }: 
             <Satellite size={14} />
             {latestObservation ? `${text.topbar.latest} ${relativeTime(latestObservation, Date.now(), language)}` : text.topbar.noObservations}
           </span>
+          {!imported && (
+            <span className="refresh-cadence">
+              {response?.generatedAt ? `${text.topbar.lastChecked} ${relativeTime(response.generatedAt, Date.now(), language)} · ` : ''}
+              {text.topbar.refreshCadence}
+            </span>
+          )}
         </div>
 
         <div className="top-actions">
