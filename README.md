@@ -119,6 +119,7 @@ Recognized optional columns include `frp`, `confidence`, `instrument`, `satellit
 | `APP_TRUST_FORWARDED_FOR` | `false` (automatic on Render) | Trust the first forwarded client IP only behind a sanitizing reverse proxy |
 | `FIRE_BBOX` | `34.75,32.75,36.75,34.75` | Query bounds in west,south,east,north order |
 | `FIRMS_CACHE_MS` | `240000` | Successful or fallback response cache duration |
+| `SHORT_WINDOW_CACHE_MS` | `60000` | Cache cap for the 10-minute response and MTG live index |
 | `FIRMS_TIMEOUT_MS` | `45000` | Overall NASA FIRMS provider timeout |
 | `HOST` | `127.0.0.1` | Server bind address |
 | `PORT` | `4173` | Server port |

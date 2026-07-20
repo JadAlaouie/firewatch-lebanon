@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { bboxWithinCoverage, parseBbox, parseHours } from './params.mjs';
+import { bboxWithinCoverage, parseBbox, parseHours, TEN_MINUTES_IN_HOURS } from './params.mjs';
 
 describe('API query validation', () => {
-  it('accepts only finite whole-hour windows from 1 through 120', () => {
+  it('accepts the 10-minute UI window and finite whole hours from 1 through 120', () => {
     expect(parseHours(undefined, 48)).toBe(48);
+    expect(parseHours(String(10 / 60))).toBe(TEN_MINUTES_IN_HOURS);
+    expect(parseHours('0.166667')).toBe(TEN_MINUTES_IN_HOURS);
     expect(parseHours('1')).toBe(1);
     expect(parseHours('120')).toBe(120);
-    for (const invalid of ['garbage', 'NaN', '1.5', '0', '121', Infinity, ['24']]) {
+    for (const invalid of ['garbage', 'NaN', '0.16', '1.5', '0', '121', Infinity, ['24']]) {
       expect(parseHours(invalid)).toBeNull();
     }
   });

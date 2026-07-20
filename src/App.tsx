@@ -16,7 +16,11 @@ import { parseDetectionCsv } from './lib/csv';
 import { copy, languages, nextLanguage, storedLanguage, type Language } from './lib/i18n';
 import { sourceMeta, type SourceMeta } from './lib/sources';
 import { formatNumber, relativeTime } from './lib/time';
-import { LIVE_REFRESH_MS, liveRefreshDue } from './lib/refresh';
+import {
+  LIVE_REFRESH_TICK_MS,
+  isLatestRequest,
+  liveRefreshOrRetryDue,
+} from './lib/refresh';
 import { DisclaimerPanel } from './components/DisclaimerPanel';
 import { EventDetail } from './components/EventDetail';
 import { EventList, type EventSort } from './components/EventList';
@@ -117,38 +121,73 @@ function FirewatchDashboard({ language, onLanguage, onUnauthorized, onLogout }: 
   const [error, setError] = useState<string>();
   const [methodologyOpen, setMethodologyOpen] = useState(false);
   const [toast, setToast] = useState<Toast>();
+  const [now, setNow] = useState(() => Date.now());
   const fileInput = useRef<HTMLInputElement>(null);
-  const lastLiveRefreshAt = useRef(0);
+  const lastSuccessfulLiveRefreshAt = useRef(0);
+  const lastLiveAttemptAt = useRef(0);
+  const latestRequestId = useRef(0);
+  const activeRequest = useRef<AbortController | undefined>(undefined);
 
   const loadDetections = useCallback(async () => {
-    lastLiveRefreshAt.current = Date.now();
+    const requestId = ++latestRequestId.current;
+    activeRequest.current?.abort();
+    const controller = new AbortController();
+    activeRequest.current = controller;
+    lastLiveAttemptAt.current = Date.now();
     setLoading(true);
     setError(undefined);
     try {
-      const result = await fetch(`/api/detections?hours=${hours}`);
+      const result = await fetch(`/api/detections?hours=${hours}`, { signal: controller.signal });
+      if (!isLatestRequest(requestId, latestRequestId.current)) return;
       if (result.status === 401) {
         onUnauthorized();
         return;
       }
       if (!result.ok) throw new Error(text.status.loadFailed);
-      setResponse(await result.json());
+      const nextResponse = await result.json() as DetectionResponse;
+      if (!isLatestRequest(requestId, latestRequestId.current)) return;
+      setResponse(nextResponse);
+      lastSuccessfulLiveRefreshAt.current = Date.now();
+      setNow(Date.now());
     } catch {
+      if (controller.signal.aborted || !isLatestRequest(requestId, latestRequestId.current)) return;
+      lastLiveAttemptAt.current = Date.now();
       setError(text.status.loadFailed);
     } finally {
-      setLoading(false);
+      if (isLatestRequest(requestId, latestRequestId.current)) {
+        activeRequest.current = undefined;
+        setLoading(false);
+      }
     }
   }, [hours, onUnauthorized, text.status.loadFailed]);
 
-  useEffect(() => { loadDetections(); }, [loadDetections]);
+  useEffect(() => {
+    void loadDetections();
+    return () => {
+      latestRequestId.current += 1;
+      activeRequest.current?.abort();
+      activeRequest.current = undefined;
+    };
+  }, [loadDetections]);
 
   useEffect(() => {
     if (imported) return undefined;
     const refreshIfDue = () => {
-      if (document.visibilityState !== 'hidden' && liveRefreshDue(lastLiveRefreshAt.current)) {
-        loadDetections();
+      const currentTime = Date.now();
+      setNow(currentTime);
+      if (
+        document.visibilityState !== 'hidden'
+        && !activeRequest.current
+        && liveRefreshOrRetryDue(
+          lastSuccessfulLiveRefreshAt.current,
+          lastLiveAttemptAt.current,
+          currentTime,
+        )
+      ) {
+        void loadDetections();
       }
     };
-    const timer = window.setInterval(refreshIfDue, LIVE_REFRESH_MS);
+    const timer = window.setInterval(refreshIfDue, LIVE_REFRESH_TICK_MS);
     document.addEventListener('visibilitychange', refreshIfDue);
     return () => {
       window.clearInterval(timer);
@@ -165,7 +204,7 @@ function FirewatchDashboard({ language, onLanguage, onUnauthorized, onLogout }: 
   const rawDetections = imported || response?.detections || [];
   const mode: DataMode = imported ? 'imported' : response?.mode || 'demo';
   const modeDisplay = modeMeta(mode, language);
-  const cutoff = Date.now() - hours * 3600000;
+  const cutoff = now - hours * 3600000;
 
   const filteredDetections = useMemo(() => rawDetections.filter(detection => (
     Date.parse(detection.timestamp) >= cutoff - (
@@ -250,11 +289,11 @@ function FirewatchDashboard({ language, onLanguage, onUnauthorized, onLogout }: 
           <span className={`mode-badge ${modeDisplay.className}`}><i />{modeDisplay.label}</span>
           <span className="observation-age">
             <Satellite size={14} />
-            {latestObservation ? `${text.topbar.latest} ${relativeTime(latestObservation, Date.now(), language)}` : text.topbar.noObservations}
+            {latestObservation ? `${text.topbar.latest} ${relativeTime(latestObservation, now, language)}` : text.topbar.noObservations}
           </span>
           {!imported && (
             <span className="refresh-cadence">
-              {response?.generatedAt ? `${text.topbar.lastChecked} ${relativeTime(response.generatedAt, Date.now(), language)} · ` : ''}
+              {response?.generatedAt ? `${text.topbar.lastChecked} ${relativeTime(response.generatedAt, now, language)} · ` : ''}
               {text.topbar.refreshCadence}
             </span>
           )}

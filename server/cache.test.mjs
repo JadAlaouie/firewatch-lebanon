@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { coalesce, getFresh, setBounded } from './cache.mjs';
+import { coalesce, detectionCacheTtl, getFresh, setBounded } from './cache.mjs';
 
 describe('bounded provider caching', () => {
   it('expires stale entries and evicts the least recently used key', () => {
@@ -26,5 +26,12 @@ describe('bounded provider caching', () => {
     expect([first, second]).toEqual([42, 42]);
     expect(loader).toHaveBeenCalledOnce();
     expect(inFlight.size).toBe(0);
+  });
+
+  it('caps the canonical 10-minute response and index cache at one minute', () => {
+    expect(detectionCacheTtl(10 / 60, 240_000)).toBe(60_000);
+    expect(detectionCacheTtl(10 / 60, 240_000, 30_000)).toBe(30_000);
+    expect(detectionCacheTtl(10 / 60, 240_000, 120_000)).toBe(60_000);
+    expect(detectionCacheTtl(6, 240_000, 30_000)).toBe(240_000);
   });
 });

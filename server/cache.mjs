@@ -33,3 +33,18 @@ export function coalesce(inFlight, key, loader) {
   inFlight.set(key, task);
   return task;
 }
+
+const TEN_MINUTES_IN_HOURS = 10 / 60;
+const MAX_SHORT_WINDOW_CACHE_MS = 60_000;
+
+export function detectionCacheTtl(hours, configuredTtlMs, shortWindowTtlMs = MAX_SHORT_WINDOW_CACHE_MS) {
+  const baseTtlMs = Number.isFinite(configuredTtlMs) && configuredTtlMs >= 0
+    ? configuredTtlMs
+    : 240_000;
+  if (Math.abs(hours - TEN_MINUTES_IN_HOURS) >= 1e-6) return baseTtlMs;
+
+  const requestedShortTtlMs = Number.isFinite(shortWindowTtlMs) && shortWindowTtlMs >= 0
+    ? shortWindowTtlMs
+    : MAX_SHORT_WINDOW_CACHE_MS;
+  return Math.min(baseTtlMs, requestedShortTtlMs, MAX_SHORT_WINDOW_CACHE_MS);
+}

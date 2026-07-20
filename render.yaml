@@ -50,5 +50,7 @@ services:
         value: "34.75,32.75,36.75,34.75"
       - key: FIRMS_CACHE_MS
         value: "240000"
+      - key: SHORT_WINDOW_CACHE_MS
+        value: "60000"
       - key: FIRMS_TIMEOUT_MS
         value: "45000"

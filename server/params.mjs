@@ -1,9 +1,11 @@
+export const TEN_MINUTES_IN_HOURS = 10 / 60;
+
 export function parseHours(value, fallback = 48) {
   if (Array.isArray(value)) return null;
   const candidate = value == null || value === '' ? fallback : Number(value);
-  return Number.isInteger(candidate) && candidate >= 1 && candidate <= 120
-    ? candidate
-    : null;
+  if (!Number.isFinite(candidate)) return null;
+  if (Math.abs(candidate - TEN_MINUTES_IN_HOURS) < 1e-6) return TEN_MINUTES_IN_HOURS;
+  return Number.isInteger(candidate) && candidate >= 1 && candidate <= 120 ? candidate : null;
 }
 
 export function parseBbox(value) {

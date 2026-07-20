@@ -2,7 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { coalesce, getFresh, setBounded } from './server/cache.mjs';
+import { coalesce, detectionCacheTtl, getFresh, setBounded } from './server/cache.mjs';
 import { CALORIS_SOURCE, fetchCalorisMtGDetections, MTG_TIME_QUANTIZATION_MS } from './server/caloris.mjs';
 import { createAuth } from './server/auth.mjs';
 import { insideCoverageDetection } from './server/coverage.mjs';
@@ -18,6 +18,7 @@ const port = Number(process.env.PORT || 4173);
 const host = process.env.HOST || '127.0.0.1';
 const defaultBbox = process.env.FIRE_BBOX || '34.75,32.75,36.75,34.75';
 const cacheTtl = Number(process.env.FIRMS_CACHE_MS || 240000);
+const shortWindowCacheTtl = Number(process.env.SHORT_WINDOW_CACHE_MS || 60_000);
 const mtgBridgeEnabled = /^(1|true|yes)$/i.test(process.env.CALORIS_MTG_BRIDGE || 'true');
 const firmsTimeoutMs = Number(process.env.FIRMS_TIMEOUT_MS || 45_000);
 const mtgTimeoutMs = Number(process.env.CALORIS_TIMEOUT_MS || 90_000);
@@ -94,6 +95,21 @@ function responseEnvelope({ mode, detections, bbox, hours, warnings = [] }) {
   };
 }
 
+function demoEnvelope({ mode, bbox, hours, reason }) {
+  const detections = makeDemoDetections(hours)
+    .filter(detection => insideCoverageDetection(detection, bbox));
+  const availability = detections.length
+    ? 'Showing generated demonstration data.'
+    : 'No demonstration detections match the selected area and time window.';
+  return responseEnvelope({
+    mode,
+    detections,
+    bbox,
+    hours,
+    warnings: [`${reason} ${availability}`],
+  });
+}
+
 function providerError(error) {
   const message = error instanceof Error ? error.message : String(error);
   return /abort|timeout|timed out/i.test(message) ? 'request timed out' : message;
@@ -158,6 +174,9 @@ app.get('/api/status', auth.requireAuth, (_request, response) => {
     sources: mtgBridgeEnabled ? [...FIRMS_SOURCES, CALORIS_SOURCE] : FIRMS_SOURCES,
     mtgBridgeEnabled,
     refreshSeconds: Math.round(cacheTtl / 1000),
+    shortWindowRefreshSeconds: Math.round(
+      detectionCacheTtl(10 / 60, cacheTtl, shortWindowCacheTtl) / 1000,
+    ),
     services: statusSnapshot(),
   });
 });
@@ -172,6 +191,7 @@ async function fetchEumetsatDetections({ hours, bbox }) {
       baseUrl: process.env.CALORIS_BASE_URL,
       requestTimeoutMs: mtgRequestTimeoutMs,
       indexTimeoutMs: mtgIndexTimeoutMs,
+      indexCacheMs: detectionCacheTtl(hours, cacheTtl, shortWindowCacheTtl),
     }),
     lsaSafStatusEnabled
       ? fetchLsaSafStatus({
@@ -207,12 +227,11 @@ async function fetchEumetsatDetections({ hours, bbox }) {
 
 async function loadDetectionEnvelope({ hours, bbox }) {
   if (!process.env.FIRMS_MAP_KEY && !mtgBridgeEnabled) {
-    return responseEnvelope({
+    return demoEnvelope({
       mode: 'demo',
-      detections: makeDemoDetections(hours).filter(detection => insideCoverageDetection(detection, bbox)),
       bbox,
       hours,
-      warnings: ['FIRMS_MAP_KEY is not configured. Showing generated demonstration data.'],
+      reason: 'Live providers are not configured.',
     });
   }
 
@@ -308,19 +327,20 @@ async function loadDetectionEnvelope({ hours, bbox }) {
       warnings,
     });
   } catch (error) {
-    return responseEnvelope({
+    return demoEnvelope({
       mode: 'demo-fallback',
-      detections: makeDemoDetections(hours).filter(detection => insideCoverageDetection(detection, bbox)),
       bbox,
       hours,
-      warnings: [`Live retrieval failed: ${error.message}. Showing demonstration data.`],
+      reason: `Live retrieval failed: ${error.message}.`,
     });
   }
 }
 
 app.get('/api/detections', auth.requireAuth, async (request, response) => {
   const hours = parseHours(request.query.hours, 48);
-  if (hours == null) return response.status(400).json({ error: 'hours must be a whole number from 1 through 120' });
+  if (hours == null) return response.status(400).json({
+    error: 'hours must be the 10-minute window or a whole number from 1 through 120',
+  });
 
   const coverageBbox = parseBbox(defaultBbox);
   if (!coverageBbox) return response.status(500).json({ error: 'Invalid FIRE_BBOX configuration' });
@@ -333,14 +353,15 @@ app.get('/api/detections', auth.requireAuth, async (request, response) => {
   }
 
   const key = `${bbox}:${hours}:${Boolean(process.env.FIRMS_MAP_KEY)}:${mtgBridgeEnabled}`;
-  const cached = getFresh(responseCache, key, cacheTtl);
+  const windowCacheTtl = detectionCacheTtl(hours, cacheTtl, shortWindowCacheTtl);
+  const cached = getFresh(responseCache, key, windowCacheTtl);
   if (cached) return response.json(cached);
 
   const envelope = await coalesce(responseInFlight, key, async () => {
-    const refreshedCache = getFresh(responseCache, key, cacheTtl);
+    const refreshedCache = getFresh(responseCache, key, windowCacheTtl);
     if (refreshedCache) return refreshedCache;
     const value = await loadDetectionEnvelope({ hours, bbox });
-    const ttl = value.mode === 'demo-fallback' ? Math.min(cacheTtl, 15_000) : cacheTtl;
+    const ttl = value.mode === 'demo-fallback' ? Math.min(windowCacheTtl, 15_000) : windowCacheTtl;
     return setBounded(responseCache, key, value, MAX_RESPONSE_CACHE_ENTRIES, Date.now(), ttl);
   });
   return response.json(envelope);

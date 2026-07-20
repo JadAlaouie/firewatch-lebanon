@@ -37,6 +37,35 @@ describe('normalizeFirmsCsv', () => {
     expect(rows).toEqual([]);
   });
 
+  it('includes the exact 10-minute cutoff and excludes observations just beyond it', async () => {
+    const csv = [
+      'latitude,longitude,acq_date,acq_time,confidence,frp',
+      '33.695,35.579,2026-07-20,1150,80,10',
+      '33.696,35.580,2026-07-20,1149,80,9',
+    ].join('\n');
+    const requestText = async () => ({ ok: true, status: 200, headers: {}, body: csv });
+    const options = {
+      key: 'test',
+      bbox: '34.75,32.75,36.75,34.75',
+      hours: 10 / 60,
+      requestText,
+      retries: 0,
+    };
+
+    const atBoundary = await fetchFirmsDetections({
+      ...options,
+      now: Date.parse('2026-07-20T12:00:00.000Z'),
+    });
+    const justPastBoundary = await fetchFirmsDetections({
+      ...options,
+      now: Date.parse('2026-07-20T12:00:00.001Z'),
+    });
+
+    expect(atBoundary.detections).toHaveLength(4);
+    expect(atBoundary.detections.every(item => item.timestamp === '2026-07-20T11:50:00.000Z')).toBe(true);
+    expect(justPastBoundary.detections).toHaveLength(0);
+  });
+
   it('retries a transient upstream failure and retains partial source success', async () => {
     const attempts = new Map();
     const csv = [

@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { latLngToCell } from 'h3-js';
-import { decodeLiveEvents, decodeMtGRecords, tixEpoch } from './caloris.mjs';
+import {
+  decodeLiveEvents,
+  decodeMtGRecords,
+  MTG_TIME_QUANTIZATION_MS,
+  tixEpoch,
+} from './caloris.mjs';
 
 const referenceTix = 0x8201a94e3c00n;
 
@@ -80,6 +85,35 @@ describe('Caloris MTG compatibility decoder', () => {
     });
     expect(detections).toHaveLength(1);
     expect(detections[0].eventAnchorCell).toBe(anchorCell);
+  });
+
+  it('includes the quantized 10-minute cutoff and excludes records just beyond it', () => {
+    const eventCell = latLngToCell(33.2827, 35.5931, 7);
+    const hotspotCell = latLngToCell(33.2827, 35.5931, 12);
+    const index = Buffer.alloc(32);
+    index.writeBigUInt64LE(BigInt(`0x${eventCell}`), 0);
+    index.writeBigUInt64LE(referenceTix, 8);
+    index.writeBigUInt64LE(referenceTix, 16);
+    index.writeUInt32LE(1, 24);
+
+    const hotspot = Buffer.alloc(24);
+    hotspot.writeBigUInt64BE(BigInt(`0x${hotspotCell}`), 0);
+    hotspot.writeBigUInt64BE(referenceTix, 8);
+    hotspot.writeFloatLE(12.5, 16);
+    hotspot.writeUInt8(200, 20);
+    hotspot.writeUInt8('F'.charCodeAt(0), 21);
+
+    const decodedEpoch = tixEpoch(referenceTix) * 1000;
+    const boundaryNow = decodedEpoch + 10 * 60_000 + MTG_TIME_QUANTIZATION_MS;
+    const options = {
+      hours: 10 / 60,
+      bbox: '34.75,32.75,36.75,34.75',
+    };
+
+    expect(decodeLiveEvents(index, { ...options, now: boundaryNow })).toHaveLength(1);
+    expect(decodeLiveEvents(index, { ...options, now: boundaryNow + 1 })).toHaveLength(0);
+    expect(decodeMtGRecords(hotspot, { ...options, now: boundaryNow })).toHaveLength(1);
+    expect(decodeMtGRecords(hotspot, { ...options, now: boundaryNow + 1 })).toHaveLength(0);
   });
 
   it('normalizes only MTG-FCI hotspot records', () => {

@@ -3,7 +3,10 @@ const incidents = [
     region: 'Chouf',
     center: [35.614, 33.694],
     points: 18,
-    ageHours: 0.7,
+    // Keep one clearly-labelled synthetic point inside the 10-minute view.
+    // The base timestamp is rounded down by at most five minutes, so a
+    // three-minute age remains safely inside that window.
+    ageHours: 0.05,
     spread: 0.028,
     baseFrp: 23,
   },
