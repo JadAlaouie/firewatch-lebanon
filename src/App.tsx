@@ -32,6 +32,10 @@ interface Toast {
   message: string;
 }
 
+// The compatibility feed stores MTG observation times at 256-second
+// resolution. Match the server tolerance so a boundary record is not hidden.
+const SATELLITE_TIMESTAMP_TOLERANCE_MS = 256_000;
+
 function modeMeta(mode: DataMode, language: Language) {
   const text = copy[language].modes;
   if (mode === 'live') return { label: text.live, className: 'live' };
@@ -40,6 +44,11 @@ function modeMeta(mode: DataMode, language: Language) {
   if (mode === 'demo-fallback') return { label: text.demoFallback, className: 'demo' };
   return { label: text.demo, className: 'demo' };
 }
+
+const providerNames: Record<string, string> = {
+  eumetsatMtg: 'EUMETSAT MTG',
+  nasaFirms: 'NASA FIRMS',
+};
 
 type AuthState = 'checking' | 'authenticated' | 'anonymous';
 
@@ -159,7 +168,9 @@ function FirewatchDashboard({ language, onLanguage, onUnauthorized, onLogout }: 
   const cutoff = Date.now() - hours * 3600000;
 
   const filteredDetections = useMemo(() => rawDetections.filter(detection => (
-    Date.parse(detection.timestamp) >= cutoff
+    Date.parse(detection.timestamp) >= cutoff - (
+      detection.sourceProduct === 'MTG_FCI_LSA_SAF' ? SATELLITE_TIMESTAMP_TOLERANCE_MS : 0
+    )
     && detection.confidence >= minimumConfidence
     && !hiddenSources.has(detection.sourceProduct)
     && (includeStatic || detection.type === 0)
@@ -182,9 +193,13 @@ function FirewatchDashboard({ language, onLanguage, onUnauthorized, onLogout }: 
 
   const totalFrp = filteredDetections.reduce((sum, item) => sum + item.frp, 0);
   const latestObservation = filteredDetections.reduce((latest, item) => item.timestamp > latest ? item.timestamp : latest, '');
-  const visibleWarning = imported
-    ? text.status.importedPaused
-    : response?.warnings?.[0];
+  const visibleWarnings = imported
+    ? [text.status.importedPaused]
+    : response?.warnings || [];
+  const providerHealth = ['eumetsatMtg', 'nasaFirms'].flatMap(key => {
+    const provider = response?.providerStatus?.[key];
+    return provider ? [{ key, label: providerNames[key], provider }] : [];
+  });
 
   const toggleSource = (source: string) => {
     setHiddenSources(current => {
@@ -269,14 +284,34 @@ function FirewatchDashboard({ language, onLanguage, onUnauthorized, onLogout }: 
       <div className="workspace">
         <aside className={`sidebar ${selected ? 'has-mobile-detail' : ''}`}>
           <div className="events-pane">
-            {visibleWarning && (
-              <div className={`status-banner ${modeDisplay.className}`}>
+            {visibleWarnings.map((warning, index) => (
+              <div className={`status-banner ${modeDisplay.className}`} key={`${warning}-${index}`}>
                 <AlertTriangle size={16} />
-                <span>{visibleWarning}</span>
-                {imported && <button type="button" onClick={resetImport}>{text.status.restoreFeed}</button>}
+                <span>{warning}</span>
+                {imported && index === 0 && <button type="button" onClick={resetImport}>{text.status.restoreFeed}</button>}
+              </div>
+            ))}
+            {error && <div className="status-banner error"><AlertTriangle size={16} /><span>{error}</span></div>}
+            {!imported && providerHealth.length > 0 && (
+              <div className="provider-health" role="status" aria-label={text.status.services}>
+                <span className="provider-health-label">{text.status.services}</span>
+                {providerHealth.map(({ key, label, provider }) => {
+                  const stateLabel = text.status.providerStates[provider.status];
+                  return (
+                    <span
+                      className={`provider-state ${provider.status}`}
+                      key={key}
+                      title={`${label}: ${stateLabel}`}
+                      aria-label={`${label}: ${stateLabel}`}
+                    >
+                      <i aria-hidden="true" />
+                      <b>{label}</b>
+                      <small>{stateLabel}</small>
+                    </span>
+                  );
+                })}
               </div>
             )}
-            {error && <div className="status-banner error"><AlertTriangle size={16} /><span>{error}</span></div>}
 
             <div className="summary-strip">
               <div><b>{formatNumber(events.length, 0, language)}</b><span>{text.summary.clusters}</span></div>

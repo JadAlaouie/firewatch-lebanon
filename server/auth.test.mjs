@@ -55,4 +55,86 @@ describe('server authentication', () => {
     expect(response.statusCode).toBe(401);
     expect(response.headers['Set-Cookie']).toBeUndefined();
   });
+
+  it('always accepts correct credentials while invalid attempts remain throttled', () => {
+    const auth = createAuth({ username: 'operator', password: 'correct' });
+    const login = password => {
+      const response = responseMock();
+      auth.login({ body: { username: 'operator', password }, headers: {}, ip: 'shared-proxy' }, response);
+      return response;
+    };
+
+    expect(Array.from({ length: 5 }, () => login('wrong').statusCode))
+      .toEqual([401, 401, 401, 401, 401]);
+    expect(login('still-wrong').statusCode).toBe(429);
+
+    const correct = login('correct');
+    expect(correct.statusCode).toBe(200);
+    expect(correct.body).toEqual({ authenticated: true });
+    expect(correct.headers['Set-Cookie']).toContain(`${SESSION_COOKIE}=`);
+
+    // A successful login clears this address's failed-attempt window.
+    expect(login('wrong-again').statusCode).toBe(401);
+  });
+
+  it('bounds failed-login tracking across distinct client addresses', () => {
+    const auth = createAuth({
+      username: 'operator',
+      password: 'correct',
+      maxTrackedFailures: 2,
+    });
+    const attempt = ip => {
+      const response = responseMock();
+      auth.login({ body: { username: 'operator', password: 'wrong' }, headers: {}, ip }, response);
+      return response.statusCode;
+    };
+
+    expect(Array.from({ length: 5 }, () => attempt('first'))).toEqual([401, 401, 401, 401, 401]);
+    expect(attempt('second')).toBe(401);
+    expect(attempt('third')).toBe(401);
+    // The oldest distinct address was evicted instead of remaining globally
+    // rate-limited forever in an unbounded map.
+    expect(attempt('first')).toBe(401);
+  });
+
+  it('uses the sanitized client-first address behind multiple production proxies', () => {
+    const auth = createAuth({
+      username: 'operator',
+      password: 'correct',
+      trustForwardedFor: true,
+    });
+    const attempt = client => {
+      const response = responseMock();
+      auth.login({
+        body: { username: 'operator', password: 'wrong' },
+        headers: { 'x-forwarded-for': `${client}, 203.0.113.254` },
+        ip: '203.0.113.254',
+      }, response);
+      return response.statusCode;
+    };
+
+    expect(Array.from({ length: 5 }, (_, index) => attempt(`198.51.100.${index + 1}`)))
+      .toEqual([401, 401, 401, 401, 401]);
+    expect(attempt('198.51.100.1')).toBe(401);
+    expect(Array.from({ length: 5 }, () => attempt('198.51.100.9')))
+      .toEqual([401, 401, 401, 401, 401]);
+    expect(attempt('198.51.100.9')).toBe(429);
+  });
+
+  it('ignores spoofable forwarded addresses unless proxy trust is explicit', () => {
+    const auth = createAuth({ username: 'operator', password: 'correct' });
+    const attempt = forwarded => {
+      const response = responseMock();
+      auth.login({
+        body: { username: 'operator', password: 'wrong' },
+        headers: { 'x-forwarded-for': forwarded },
+        ip: '203.0.113.10',
+      }, response);
+      return response.statusCode;
+    };
+
+    expect(Array.from({ length: 5 }, (_, index) => attempt(`198.51.100.${index + 1}`)))
+      .toEqual([401, 401, 401, 401, 401]);
+    expect(attempt('198.51.100.250')).toBe(429);
+  });
 });

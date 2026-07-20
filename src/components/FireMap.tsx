@@ -12,24 +12,37 @@ import Map, {
   type MapRef,
 } from 'react-map-gl/maplibre';
 import type { FeatureCollection, MultiPolygon, Point, Polygon } from 'geojson';
-import type { StyleSpecification } from 'maplibre-gl';
+import {
+  getRTLTextPluginStatus,
+  setRTLTextPlugin,
+  type StyleSpecification,
+} from 'maplibre-gl';
 import type { FireEvent } from '../types';
 import { copy, eventName, type Language } from '../lib/i18n';
 import { sourceColor } from '../lib/sources';
 import { formatNumber, relativeTime } from '../lib/time';
 
 type Basemap = 'street' | 'terrain';
+const rtlTextPluginUrl = new URL(
+  '../../node_modules/@mapbox/mapbox-gl-rtl-text/dist/mapbox-gl-rtl-text.js',
+  import.meta.url,
+).href;
+
+if (getRTLTextPluginStatus() === 'unavailable') {
+  void setRTLTextPlugin(rtlTextPluginUrl, true).catch(error => {
+    console.warn('Arabic map-label shaping could not be loaded.', error);
+  });
+}
 
 const styles: Record<Basemap, StyleSpecification> = {
   street: {
     version: 8,
-    glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
     sources: {
       osm: {
         type: 'raster',
         tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
         tileSize: 256,
-        attribution: '(c) OpenStreetMap contributors',
+        attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>',
       },
     },
     layers: [{
@@ -45,13 +58,16 @@ const styles: Record<Basemap, StyleSpecification> = {
   },
   terrain: {
     version: 8,
-    glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
     sources: {
       topo: {
         type: 'raster',
-        tiles: ['https://a.tile.opentopomap.org/{z}/{x}/{y}.png'],
+        tiles: [
+          'https://a.tile.opentopomap.org/{z}/{x}/{y}.png',
+          'https://b.tile.opentopomap.org/{z}/{x}/{y}.png',
+          'https://c.tile.opentopomap.org/{z}/{x}/{y}.png',
+        ],
         tileSize: 256,
-        attribution: '(c) OpenStreetMap contributors, SRTM | Map style (c) OpenTopoMap',
+        attribution: 'Map data: © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>, SRTM | Map style: © <a href="https://opentopomap.org" target="_blank" rel="noopener noreferrer">OpenTopoMap</a> (CC-BY-SA)',
       },
     },
     layers: [{
@@ -290,7 +306,7 @@ export function FireMap({ events, selected, onSelect, language }: FireMapProps) 
         </Source>
         <NavigationControl position="bottom-right" showCompass={false} />
         <ScaleControl position="bottom-right" unit="metric" />
-        <AttributionControl position="bottom-left" compact />
+        <AttributionControl position="bottom-left" compact={false} />
         {hovered && (
           <Popup
             longitude={hovered.longitude}

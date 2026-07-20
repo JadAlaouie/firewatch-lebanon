@@ -21,6 +21,9 @@ services:
         sync: false
       - key: APP_SESSION_HOURS
         value: "12"
+      # Render's public load balancer is the only network path to this service.
+      - key: APP_TRUST_FORWARDED_FOR
+        value: "true"
       - key: CALORIS_MTG_BRIDGE
         value: "true"
       - key: CALORIS_BASE_URL
@@ -33,6 +36,16 @@ services:
         value: "15000"
       - key: CALORIS_STALE_MS
         value: "600000"
+      - key: LSASAF_STATUS_CHECK
+        value: "true"
+      - key: LSASAF_WMS_URL
+        value: "https://adaguc.lsasvcs.ipma.pt/adaguc-server?DATASET=MTG-FRP&SERVICE=WMS&REQUEST=GetCapabilities&VERSION=1.3.0"
+      - key: LSASAF_STATUS_TIMEOUT_MS
+        value: "15000"
+      - key: LSASAF_MAX_LAG_MS
+        value: "3600000"
+      - key: PROVIDER_STATUS_STALE_MS
+        value: "900000"
       - key: FIRE_BBOX
         value: "34.75,32.75,36.75,34.75"
       - key: FIRMS_CACHE_MS

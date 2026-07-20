@@ -8,9 +8,11 @@
     "build": "tsc -b && vite build",
     "start": "cross-env NODE_ENV=production node server.mjs",
     "check": "tsc -b",
-    "test": "vitest run"
+    "test": "vitest run",
+    "verify:services": "node server/verify-services.mjs"
   },
   "dependencies": {
+    "@mapbox/mapbox-gl-rtl-text": "0.4.0",
     "csv-parse": "^7.0.1",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",

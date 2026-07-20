@@ -7,6 +7,7 @@ const referenceTix = 0x8201a94e3c00n;
 describe('Caloris MTG compatibility decoder', () => {
   it('decodes the compact time index used by the live feed', () => {
     expect(new Date(tixEpoch(referenceTix) * 1000).toISOString()).toBe('2026-07-12T12:56:32.000Z');
+    expect(() => tixEpoch(0xffffffffffffffffn)).toThrow(/time-index level/);
   });
 
   it('selects recent events across the configured regional coverage', () => {
@@ -39,6 +40,48 @@ describe('Caloris MTG compatibility decoder', () => {
     expect(events.every(event => event.hotspots === 12)).toBe(true);
   });
 
+  it('loads coarse boundary events before applying an exact point bbox', () => {
+    const anchorCell = latLngToCell(33.27129211, 35.52731669, 7);
+    const tinyBbox = '35.553017,33.291884,35.554017,33.292884';
+    const coverageBbox = '34.75,32.75,36.75,34.75';
+    const index = Buffer.alloc(32);
+    index.writeBigUInt64LE(BigInt(`0x${anchorCell}`), 0);
+    index.writeBigUInt64LE(referenceTix, 8);
+    index.writeBigUInt64LE(referenceTix, 16);
+    index.writeUInt32LE(1, 24);
+
+    expect(decodeLiveEvents(index, {
+      hours: 48,
+      bbox: tinyBbox,
+      now: Date.parse('2026-07-13T09:00:00.000Z'),
+    })).toHaveLength(0);
+
+    const events = decodeLiveEvents(index, {
+      hours: 48,
+      bbox: tinyBbox,
+      eventBbox: coverageBbox,
+      now: Date.parse('2026-07-13T09:00:00.000Z'),
+    });
+    expect(events).toHaveLength(1);
+
+    const hotspot = Buffer.alloc(24);
+    const hotspotCell = latLngToCell(33.29238368, 35.55351738, 12);
+    hotspot.writeBigUInt64BE(BigInt(`0x${hotspotCell}`), 0);
+    hotspot.writeBigUInt64BE(referenceTix, 8);
+    hotspot.writeFloatLE(12.5, 16);
+    hotspot.writeUInt8(200, 20);
+    hotspot.writeUInt8('F'.charCodeAt(0), 21);
+
+    const detections = decodeMtGRecords(hotspot, {
+      hours: 48,
+      bbox: tinyBbox,
+      eventAnchorCell: events[0].h7,
+      now: Date.parse('2026-07-13T09:00:00.000Z'),
+    });
+    expect(detections).toHaveLength(1);
+    expect(detections[0].eventAnchorCell).toBe(anchorCell);
+  });
+
   it('normalizes only MTG-FCI hotspot records', () => {
     const buffer = Buffer.alloc(48);
     const cell = latLngToCell(33.2827, 35.5931, 9);
@@ -64,7 +107,7 @@ describe('Caloris MTG compatibility decoder', () => {
     expect(detections).toHaveLength(1);
     expect(detections[0]).toMatchObject({
       sourceProduct: 'MTG_FCI_LSA_SAF',
-      satellite: 'MTG-I1',
+      satellite: 'Meteosat-12 (MTG-I1)',
       instrument: 'FCI',
       confidence: 100,
       frp: 18.5,

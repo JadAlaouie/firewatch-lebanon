@@ -27,6 +27,16 @@ export interface DetectionResponse {
   hours: number;
   sources: string[];
   warnings: string[];
+  providerStatus?: Record<string, {
+    configured: boolean;
+    status: 'idle' | 'checking' | 'ok' | 'degraded' | 'down' | 'disabled' | 'stale';
+    checkedAt?: string;
+    lastSuccess?: string;
+    latencyMs?: number;
+    detectionCount?: number;
+    error?: string;
+    [detail: string]: unknown;
+  }>;
   detections: Detection[];
 }
 

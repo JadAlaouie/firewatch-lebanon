@@ -1,7 +1,16 @@
 import { Eye, EyeOff, LoaderCircle, LockKeyhole, LogIn, ShieldCheck, UserRound } from 'lucide-react';
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, useRef, useState } from 'react';
 import { copy, languages, nextLanguage, type Language } from '../lib/i18n';
+import { loginWithRetry, type LoginOutcome, type LoginProgress } from '../lib/login';
 import ncneLogo from '../../ncne-white-resized.png';
+
+function loginError(outcome: Exclude<LoginOutcome, { ok: true }>, language: Language) {
+  const text = copy[language].login;
+  if (outcome.reason === 'invalid-credentials') return text.invalidCredentials;
+  if (outcome.reason === 'rate-limited') return text.rateLimited(outcome.retryAfterSeconds);
+  if (outcome.reason === 'not-configured') return text.notConfigured;
+  return text.temporarilyUnavailable;
+}
 
 export function LoginPage({ language, onLanguage, onAuthenticated }: {
   language: Language;
@@ -12,27 +21,31 @@ export function LoginPage({ language, onLanguage, onAuthenticated }: {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState<LoginProgress>();
   const [error, setError] = useState('');
+  const submitting = useRef(false);
+  const loading = progress !== undefined;
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setLoading(true);
+    if (submitting.current) return;
+    submitting.current = true;
     setError('');
     try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ username, password }),
-      });
-      if (!response.ok) throw new Error(text.login.failed);
-      onAuthenticated();
+      const outcome = await loginWithRetry(username, password, { onProgress: setProgress });
+      if (outcome.ok) onAuthenticated();
+      else setError(loginError(outcome, language));
     } catch {
-      setError(text.login.failed);
+      setError(text.login.temporarilyUnavailable);
     } finally {
-      setLoading(false);
+      submitting.current = false;
+      setProgress(undefined);
     }
   };
+
+  const progressLabel = progress === 'waking'
+    ? text.login.wakingService
+    : progress === 'retrying' ? text.login.retrying : text.login.signingIn;
 
   return (
     <main className="login-screen" dir={languages[language].dir}>
@@ -57,11 +70,14 @@ export function LoginPage({ language, onLanguage, onAuthenticated }: {
               <UserRound size={17} />
               <input
                 autoComplete="username"
+                autoCapitalize="none"
                 autoFocus
+                disabled={loading}
                 id="login-username"
                 name="username"
+                spellCheck={false}
                 value={username}
-                onChange={event => setUsername(event.target.value)}
+                onChange={event => { setUsername(event.target.value); setError(''); }}
                 required
               />
             </div>
@@ -73,11 +89,13 @@ export function LoginPage({ language, onLanguage, onAuthenticated }: {
               <LockKeyhole size={17} />
               <input
                 autoComplete="current-password"
+                autoCapitalize="none"
+                disabled={loading}
                 id="login-password"
                 name="password"
                 type={showPassword ? 'text' : 'password'}
                 value={password}
-                onChange={event => setPassword(event.target.value)}
+                onChange={event => { setPassword(event.target.value); setError(''); }}
                 required
               />
               <button
@@ -85,6 +103,7 @@ export function LoginPage({ language, onLanguage, onAuthenticated }: {
                 className="login-password-toggle"
                 aria-label={showPassword ? text.login.hidePassword : text.login.showPassword}
                 title={showPassword ? text.login.hidePassword : text.login.showPassword}
+                disabled={loading}
                 onClick={() => setShowPassword(current => !current)}
               >
                 {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
@@ -95,7 +114,7 @@ export function LoginPage({ language, onLanguage, onAuthenticated }: {
           <div className="login-error" role="alert">{error}</div>
           <button className="login-submit" type="submit" disabled={loading || !username || !password}>
             {loading ? <LoaderCircle className="spin" size={18} /> : <LogIn size={18} />}
-            <span>{loading ? text.login.signingIn : text.login.submit}</span>
+            <span aria-live="polite">{loading ? progressLabel : text.login.submit}</span>
           </button>
         </form>
 

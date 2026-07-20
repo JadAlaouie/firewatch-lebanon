@@ -40,9 +40,9 @@ export const sourceCatalog: Record<string, SourceMeta> = {
   MTG_FCI_LSA_SAF: {
     key: 'MTG_FCI_LSA_SAF',
     short: 'MTG',
-    label: 'EUMETSAT MTG-FCI via LSA SAF / Tabula Caloris',
+    label: 'EUMETSAT LSA SAF MTFRPPIXEL (LSA-509) via Tabula Caloris',
     color: '#c026d3',
-    resolution: '1 km',
+    resolution: '~1 km at nadir',
   },
   IMPORTED: {
     key: 'IMPORTED',
